@@ -1,15 +1,15 @@
 import cv2
 import numpy as np
 import math
-
+from sklearn.neural_network import MLPClassifier
 from os.path import dirname, join, basename
 import sys
-from glob import glob
+from sklearn.preprocessing import StandardScaler
 from sklearn.externals import joblib
 bin_n = 16 * 16  # Number of bins
 
 clf = joblib.load("dect.model")
-
+scaler =joblib.load("scaler.model")
 def pic_handle(img, num):
     img1 = img.copy()
     img2 = img.copy()
@@ -17,15 +17,12 @@ def pic_handle(img, num):
     img4 = img.copy()
     # 变成灰度图片
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
     gaussian = cv2.GaussianBlur(gray, (3, 3), 0, 0, cv2.BORDER_DEFAULT)
     median = cv2.medianBlur(gaussian, 5)
     sobel = cv2.Sobel(median, cv2.CV_8U, 1, 0, ksize=3)
     ret, binary = cv2.threshold(sobel, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     # binary = cv2.adaptiveThreshold(sobel, 250, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3,5)
-
     # cv2.imwrite(r'C:\Users\lx\Desktop\binary_process1.jpg',binary)
-
     element1 = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 1))
     element2 = cv2.getStructuringElement(cv2.MORPH_RECT, (8, 6))
     # 膨胀一次，让轮廓突出
@@ -54,7 +51,7 @@ def pic_handle(img, num):
         area = cv2.contourArea(cnt)
 
         # 面积不合适的都筛选掉
-        if (area < 8000 or area > 34000):
+        if (area < 8000 or area > 30000):
             continue
 
         # 轮廓近似
@@ -99,15 +96,17 @@ def pic_handle(img, num):
         xs = [box[0, 0], box[1, 0], box[2, 0], box[3, 0]]
         ys_sorted_index = np.argsort(ys)
         xs_sorted_index = np.argsort(xs)
-        x1 = box[xs_sorted_index[0], 0] + 20
+        x1 = box[xs_sorted_index[0], 0] + 15
         if (x1 <= 0):
             x1 = 0
 
-        x2 = box[xs_sorted_index[3], 0] - 20
-        y1 = box[ys_sorted_index[0], 1] + 20
+        x2 = box[xs_sorted_index[3], 0] - 15
+        y1 = box[ys_sorted_index[0], 1] + 15
         if (y1 <= 0):
             y1 = 0
-        y2 = box[ys_sorted_index[3], 1] - 20
+        # if not (y2>10 and y1>10):
+        #     continue
+        y2 = box[ys_sorted_index[3], 1] - 15
         img_plate = img3[y1:y2, x1:x2]
         img_platecopy = img_plate.copy()
         cv2.imwrite('C:/Users/lx/Desktop/handle/' + str(num) + '/res' + str(x1) + str(y1) + '.jpg', img_plate)
@@ -118,15 +117,19 @@ def pic_handle(img, num):
         cv2.imwrite('C:/Users/lx/Desktop/other2/grey' + str(x1) + str(y1)+str(x2)+str(y2) + '.jpg', res)
         cv2.imwrite('C:/Users/lx/Desktop/handle/' + str(num) + '/grey' + str(x1) + str(y1)+str(x2)+str(y2)+'.jpg',res)
         img_gray = cv2.imread('C:/Users/lx/Desktop/other2/grey' + str(x1) + str(y1)+str(x2)+str(y2) + '.jpg')
-        sta =clf.predict(   [np.array(img_gray).flatten()/255-1]   )
-        # print(sta)
-        if( sta==[0]  ):
-            continue
-        cv2.drawContours(img2, [box], 0, (0, 255, 0), 2) # 判断是车牌再框住它
-        # 倾斜纠正
-        # ret, binary = cv2.threshold(gray1, 95, 255, cv2.THRESH_BINARY)
+        sta =clf.predict(   scaler.transform([np.array(img_gray).flatten() ])   )
         (h, w) = img_platecopy.shape[:2]
         center = (w // 2, h // 2)
+        if( sta==[0]  ):
+            continue
+        if y1*25<1080 or y2>1080*29/30:
+            continue
+        if x2>1920*29/30 or x1 <1920*1/30 :
+             continue
+        # print(num,x1,y1,x2,y2,w,h)
+        cv2.drawContours(img2, [box], 0, (0, 255, 0), 2) # 判断是车牌再框住它
+        # 倾斜纠正
+
         M = cv2.getRotationMatrix2D(center, -1 * angle_map[str(box)], 1.0)
         rotated = cv2.warpAffine(img_plate, M, (w, h), flags=cv2.INTER_CUBIC
                                  , borderMode=cv2.BORDER_REPLICATE)
@@ -134,38 +137,34 @@ def pic_handle(img, num):
         cv2.imwrite('C:/Users/lx/Desktop/handle/' + str(num) + '/res' + str(x1) + str(y1) + 'binary.jpg', rotated)
         # 分割字符
         ## 车牌按照论文中的连通域方法来处理 TODO
-        img_plate = rotated
+        # 暂时不这么旋转
+        # img_plate = rotated
+        img_plate = img_platecopy
         gaussian = cv2.GaussianBlur(img_plate, (3, 3), 0, 0, cv2.BORDER_DEFAULT)
 
         gray_lap = cv2.Laplacian(gaussian, cv2.CV_16S, ksize=3)
         dst = cv2.convertScaleAbs(gray_lap)
-        # cv2.imshow('dst', dst)
-        # cv2.waitKey(0)
         gray1 = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
-
         im_at_mean = cv2.adaptiveThreshold(gray1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 3, 5)
-        # ret, im_at_mean = cv2.threshold(gray1, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-        # cv2.imshow('im_at_mean', im_at_mean)
-        # cv2.waitKey(0)
         cv2.imwrite(
             r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect1' + str(x) + str(y) + str(w) + str(h) + '.jpg',
             im_at_mean)
-
         shape = im_at_mean.shape
         image, contours, _ = cv2.findContours(im_at_mean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # cv2.drawContours(binary, contours, -1, (0,255, 0 ), 2)
         for i in range(len(contours)):
+            # 寻找字符
             cnt = contours[i]
             x, y, w, h = cv2.boundingRect(cnt)
             bili = h * 1.0 / w
             if h < 8 or w < 8:
                 continue
-            if h * 4 < shape[0] or h * 1.2 > shape[0] or w * 6 > shape[1] or w * 15 < shape[1]:
+            if h * 3 < shape[0] or h * 1.2 > shape[0] or w * 6 > shape[1] or w * 15 < shape[1]:
                 continue
-            if bili < 1.2 or bili > 5:
+            if bili < 1.2 or bili > 2.6:
                 continue
             img_plate = cv2.rectangle(img_plate, (x, y), (x + w + 2, y + h + 2), (0, 0, 255), 1)
-        # print('C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect' + str(x)+str(y)+str(w)+str(h) + '.jpg')
+
         cv2.imwrite(
             r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect' + str(x) + str(y) + str(w) + str(h) + '.jpg',
             img_plate)
