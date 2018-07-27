@@ -6,8 +6,6 @@ from os.path import dirname, join, basename
 import sys
 from sklearn.preprocessing import StandardScaler
 from sklearn.externals import joblib
-bin_n = 16 * 16  # Number of bins
-
 clf = joblib.load("dect.model")
 scaler =joblib.load("scaler.model")
 def pic_handle(img, num):
@@ -90,23 +88,21 @@ def pic_handle(img, num):
 
     # 用绿线画出这些找到的轮廓
     for box in region:
-
-
         ys = [box[0, 1], box[1, 1], box[2, 1], box[3, 1]]
         xs = [box[0, 0], box[1, 0], box[2, 0], box[3, 0]]
         ys_sorted_index = np.argsort(ys)
         xs_sorted_index = np.argsort(xs)
-        x1 = box[xs_sorted_index[0], 0] + 15
+        x1 = box[xs_sorted_index[0], 0] + 20
         if (x1 <= 0):
             x1 = 0
 
-        x2 = box[xs_sorted_index[3], 0] - 15
-        y1 = box[ys_sorted_index[0], 1] + 15
+        x2 = box[xs_sorted_index[3], 0] - 20
+        y1 = box[ys_sorted_index[0], 1] + 20
         if (y1 <= 0):
             y1 = 0
         # if not (y2>10 and y1>10):
         #     continue
-        y2 = box[ys_sorted_index[3], 1] - 15
+        y2 = box[ys_sorted_index[3], 1] - 20
         img_plate = img3[y1:y2, x1:x2]
         img_platecopy = img_plate.copy()
         cv2.imwrite('C:/Users/lx/Desktop/handle/' + str(num) + '/res' + str(x1) + str(y1) + '.jpg', img_plate)
@@ -128,20 +124,9 @@ def pic_handle(img, num):
              continue
         # print(num,x1,y1,x2,y2,w,h)
         cv2.drawContours(img2, [box], 0, (0, 255, 0), 2) # 判断是车牌再框住它
-        # 倾斜纠正
-
-        M = cv2.getRotationMatrix2D(center, -1 * angle_map[str(box)], 1.0)
-        rotated = cv2.warpAffine(img_plate, M, (w, h), flags=cv2.INTER_CUBIC
-                                 , borderMode=cv2.BORDER_REPLICATE)
-
-        cv2.imwrite('C:/Users/lx/Desktop/handle/' + str(num) + '/res' + str(x1) + str(y1) + 'binary.jpg', rotated)
-        # 分割字符
         ## 车牌按照论文中的连通域方法来处理 TODO
-        # 暂时不这么旋转
-        # img_plate = rotated
         img_plate = img_platecopy
         gaussian = cv2.GaussianBlur(img_plate, (3, 3), 0, 0, cv2.BORDER_DEFAULT)
-
         gray_lap = cv2.Laplacian(gaussian, cv2.CV_16S, ksize=3)
         dst = cv2.convertScaleAbs(gray_lap)
         gray1 = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
@@ -151,7 +136,7 @@ def pic_handle(img, num):
             im_at_mean)
         shape = im_at_mean.shape
         image, contours, _ = cv2.findContours(im_at_mean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # cv2.drawContours(binary, contours, -1, (0,255, 0 ), 2)
+
         for i in range(len(contours)):
             # 寻找字符
             cnt = contours[i]
@@ -159,11 +144,15 @@ def pic_handle(img, num):
             bili = h * 1.0 / w
             if h < 8 or w < 8:
                 continue
-            if h * 3 < shape[0] or h * 1.2 > shape[0] or w * 6 > shape[1] or w * 15 < shape[1]:
+            if h * 4.9 < shape[0] or h * 1.2 > shape[0] or w * 5 > shape[1] or w * 15 < shape[1]:
                 continue
-            if bili < 1.2 or bili > 2.6:
+            if bili < 1.2 or bili > 2.7:
                 continue
-            img_plate = cv2.rectangle(img_plate, (x, y), (x + w + 2, y + h + 2), (0, 0, 255), 1)
+            ## 字符分割 识别 TODO
+
+
+
+            img_plate = cv2.rectangle(img_plate, (x, y), (x + w+1, y + h+1), (0, 0, 255), 1)
 
         cv2.imwrite(
             r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect' + str(x) + str(y) + str(w) + str(h) + '.jpg',

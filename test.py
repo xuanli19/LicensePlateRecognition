@@ -13,7 +13,7 @@ import os
 #         pic_handle(img,i)
 if __name__=='__main__':
 
-    for i in range(1,1000):
+    for i in range(1,6200):
         if(i%100==0):
             print(str(i),'finished')
         pic_name = 'C:/Users/lx/Desktop/test/test_pic/image'+str(i)+'.jpg'
