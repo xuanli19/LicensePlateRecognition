@@ -144,13 +144,13 @@ def pic_handle(img, num):
         # print(num,x1,y1,x2,y2,w,h)
         cv2.drawContours(img2, [box], 0, (0, 255, 0), 2) # 判断是车牌再框住它
         # img_plate = img_platecopy
-        img_plate = img3[y1-10:y2+10, x1-10:x2+10]
+        img_plate = img3[y1-10:y2+10, x1-15:x2+10]
 
         gray1 = cv2.cvtColor(img_plate, cv2.COLOR_BGR2GRAY)
-        im_at_mean = cv2.adaptiveThreshold(gray1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 17, 9)
-        cv2.imwrite(
-            r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect1' + str(x) + str(y) + str(w) + str(h) + '.jpg',
-            im_at_mean)
+        im_at_mean = cv2.adaptiveThreshold(gray1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 19, 9)
+        # cv2.imwrite(
+        #     r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect1' + str(x) + str(y) + str(w) + str(h) + '.jpg',
+        #     im_at_mean)
         shape = im_at_mean.shape
         image, contours, _ = cv2.findContours(im_at_mean, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE )
 
@@ -195,13 +195,17 @@ def pic_handle(img, num):
         jiaodu  = np.average(xielv_list)
         (h, w) = img_plate.shape[:2]
         center = (w // 2, h // 2)
-        M = cv2.getRotationMatrix2D(center,  jiaodu   , 1.0 )
+        M = cv2.getRotationMatrix2D(center,  jiaodu +2 , 1.0 )
         rotated = cv2.warpAffine(img_plate, M, (w, h) ,flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
         # 对旋转完的车牌进行检测
         ## 将其灰度化，然后指定图像尺寸
+        # cv2.imshow('1',img_plate)
+        # cv2.waitKey(0)
         img_plate =rotated
+        # cv2.imshow('1', img_plate)
+        # cv2.waitKey(0)
         gray1 = cv2.cvtColor(img_plate, cv2.COLOR_BGR2GRAY)
-        im_at_mean = cv2.adaptiveThreshold(gray1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 17, 9)
+        im_at_mean = cv2.adaptiveThreshold(gray1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 19, 9)
         cv2.imwrite(
             r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect1' + str(x) + str(y) + str(w) + str(h) + '.jpg',
             im_at_mean)
@@ -216,14 +220,27 @@ def pic_handle(img, num):
             bili = h * 1.0 / w
             if h < 8 or w < 8:
                 continue
-            if h * 4.9 < shape[0] or h * 1.2 > shape[0] or w * 5 > shape[1] or w * 15 < shape[1]:
+            if h * 4.9 < shape[0] or h * 1.4 > shape[0] or w * 5 > shape[1] or w * 15 < shape[1]:
                 continue
-            if bili < 1.2 or bili > 2.8:
+            if bili < 1.6 or bili > 2.8:
                 continue
             contours_list.append((x,y,w,h))
 
         if (len(contours_list) < 4):  ## 找到少于四个矩形框,说明找的不完整 or 这个部分被错判为车牌
                 continue
+        list1 = sorted(contours_list, key=lambda x: x[2])
+        list2 = list1[1:-2]  # 去掉最高和最低的
+        w_average = np.average([x[2] for x in list2])
+        list1 = sorted(contours_list, key=lambda x: x[3])
+        list2 = list1[2:-1]
+        h_average = np.average([x[3] for x in list2])
+        # 去掉覆盖不完整的矩形框
+        while( True ):
+            if (  (list1[0][3])*1.2< h_average   ):
+                list1 = list1[1:]
+            else :
+                break
+        contours_list =list1
         #按照x进行排序
         contours_list = sorted(contours_list ,key=lambda x:x[0] )
         for i in range( 0, len(contours_list)-1  ):
@@ -233,10 +250,146 @@ def pic_handle(img, num):
             x1, y1, w1, h1 = contours_list[i+1]
             if( (x<x1) and   (x1+w1<x+w) ):
                 contours_list.pop(i+1)
+        if (len(contours_list) < 4):  ## 找到少于四个矩形框,说明找的不完整 or 这个部分被错判为车牌
+            continue
 
+        # TODO 字符修补 ： 缺失字符。。 做到左 右4个就能推测出六个字符的位置
+        # 思路:
+
+        maxwidth =0
+        maxindex =0
+        for i  in range(0,len(contours_list)-1 ):
+            if contours_list[i+1][0]-contours_list[i][0]-contours_list[i][2]>maxwidth:
+                maxindex =i
+                maxwidth =contours_list[i+1][0]-contours_list[i][0]-contours_list[i][2]
+        leftnum  = maxindex+1
+        rightnum = len(contours_list)-maxindex-1
+        # 求x y 的增量平均值
+        zengliang_x=[]
+        zengliang_y=[]
+        for i in range(0, len(contours_list) - 1):
+            zengliang_x.append(   (contours_list[i+1][1]-contours_list[i][1])/(contours_list[i+1][0]-contours_list[i][0])   )
+
+            ## 增量的计算有问题
+            # zengliang_x.append(contours_list[i+1][0]-contours_list[i][0])
+            # zengliang_y.append(contours_list[i+1][1]-contours_list[i][1])
+
+        zengliang_y= w_average*np.average(zengliang_x)
+        zengliang_x = w_average
+        # 分成多种情况
+        # 左边第三个字符没框住or右边第一个字符没框住
+        print('之前的:',contours_list)
+        print('------')
+        if len(contours_list)<6:
+
+            print(len(contours_list),maxwidth/w_average,leftnum,rightnum)
+            print('hello', num, leftnum, rightnum)
+            if maxwidth>3.3*w_average:
+
+                if leftnum==2 and rightnum==2 :
+                    x_1,y_1 =contours_list[1][0]+zengliang_x ,contours_list[1][1]+zengliang_y
+                    contours_list.append([x_1,y_1,w_average,h_average])
+                    x_1, y_1 = contours_list[2][0] - zengliang_x, contours_list[2][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                # 中间两个没了
+                # 第二和三个中间延伸两个
+                elif leftnum==1 :
+                #从最左边延伸两个矩形
+                    x_1,y_1=contours_list[0][0]+zengliang_x ,contours_list[0][1]+zengliang_y
+                    contours_list.append([x_1,y_1,w_average,h_average])
+                    x_1, y_1 = contours_list[0][0] + zengliang_x*2, contours_list[0][1] + zengliang_y*2
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                elif rightnum==1:
+                # 从最右边延伸两个矩形
+                    x_1, y_1 = contours_list[3][0] - zengliang_x, contours_list[3][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    x_1, y_1 = contours_list[3][0] - zengliang_x * 2, contours_list[3][1] - zengliang_y * 2
+                    contours_list.append([x_1, y_1, w_average, h_average])
+            elif maxwidth>2.05*w_average :
+                #
+                if leftnum==2 and rightnum==2:
+                    if zengliang_x*1.3+contours_list[0][0] >contours_list[1][0]:
+                            if zengliang_x*1.3+contours_list[2][0] >contours_list[3][0]:
+                                # 两种情况
+                                x_1, y_1 = contours_list[0][0] - zengliang_x, contours_list[0][1] - zengliang_y
+                                contours_list.append([x_1, y_1, w_average, h_average])
+                                x_1, y_1 = contours_list[2][0] - zengliang_x, contours_list[2][1] - zengliang_y
+                                contours_list.append([x_1, y_1, w_average, h_average])
+                                pass
+                            else:
+                                x_1, y_1 = contours_list[1][0] + zengliang_x, contours_list[1][1] + zengliang_y
+                                contours_list.append([x_1, y_1, w_average, h_average])
+                                x_1, y_1 = contours_list[2][0] + zengliang_x, contours_list[2][1] + zengliang_y
+                                contours_list.append([x_1, y_1, w_average, h_average])
+                                pass
+                    else:
+                        x_1, y_1 = contours_list[0][0] + zengliang_x, contours_list[0][1] + zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+                        x_1, y_1 = contours_list[2][0] - zengliang_x, contours_list[2][1] - zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+
+                elif rightnum==2 and leftnum==3:
+                    x_1, y_1 = contours_list[3][0] - zengliang_x, contours_list[3][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    pass
+                elif rightnum==3 and leftnum==2 :
+                    x_1, y_1 = contours_list[1][0] + zengliang_x, contours_list[1][1] + zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    pass
+                elif leftnum==1 and rightnum==3:
+                    x_1, y_1 = contours_list[0][0] - zengliang_x, contours_list[0][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    x_1, y_1 = contours_list[0][0] + zengliang_x , contours_list[0][1] + zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    pass
+                elif leftnum==3 and rightnum==1:
+                    x_1, y_1 = contours_list[3][0] - zengliang_x, contours_list[3][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    x_1, y_1 = contours_list[3][0] + zengliang_x, contours_list[3][1] + zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    pass
+            else:
+                # 左右都不缺
+                # 判断第一第二间的距离
+                if leftnum==1:
+                    # 向左延伸两个
+                    x_1, y_1 = contours_list[0][0] - zengliang_x, contours_list[0][1] - zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    x_1, y_1 = contours_list[0][0] - 2*zengliang_x, contours_list[0][1] -2* zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    continue
+                if rightnum==1:
+                    # 向右延伸两个
+                    x_1, y_1 = contours_list[3][0] + zengliang_x, contours_list[3][1] + zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    x_1, y_1 = contours_list[3][0] + 2 * zengliang_x, contours_list[3][1] + 2 * zengliang_y
+                    contours_list.append([x_1, y_1, w_average, h_average])
+                    continue
+                if leftnum!=3 :
+                    if zengliang_x * 1.3 + contours_list[0][0] < contours_list[1][0]:
+                        x_1, y_1 = contours_list[0][0] + zengliang_x, contours_list[0][1] + zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+                    else:
+                        x_1, y_1 = contours_list[0][0] - zengliang_x, contours_list[0][1] - zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+                        pass
+                if rightnum!=3:
+                    if zengliang_x * 1.3 + contours_list[maxindex+1 ][0] < contours_list[maxindex+2][0]:
+                        x_1, y_1 = contours_list[maxindex+1][0] + zengliang_x, contours_list[maxindex+1][1] + zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+                    else:
+                        x_1, y_1 = contours_list[maxindex+2][0] + zengliang_x, contours_list[maxindex+2][1] + zengliang_y
+                        contours_list.append([x_1, y_1, w_average, h_average])
+                        pass
+        contours_list = sorted(contours_list, key=lambda x: x[0])
+        print('之后的:', contours_list)
+        for i in range(len(contours_list)):
+            contours_list[i] = [  int(contours_list[i][0]) ,int(contours_list[i][1]),int(contours_list[i][2]),int(contours_list[i][3])  ]
+        # print(num,len(contours_list))
+        print(contours_list)
         if(len(contours_list) ==7 ):
             contours_list.pop(3)
-        # if(len(contours_list) != 6):
+        # if(len(contours_list) < 5):
         #     continue
         img_platecopy =img_plate.copy()
         train_key=[]
@@ -244,29 +397,24 @@ def pic_handle(img, num):
             x, y, w, h = contours_list[i]
             img_plate = cv2.rectangle(img_plate, (x, y), (x + w+1, y + h+1), ( 255,0, 0), 1)
             chrac = img_platecopy[y-2:y+h+1,x:x+w ]
-            # cv2.imwrite('E:/demo/'+str(num)+str(x)+str(y)+'.jpg' ,chrac )
-            # img_read = cv2.imread('E:/demo/'+str(num)+str(x)+str(y)+'.jpg')
-            # print('E:/demo/'+str(num)+str(x)+str(y)+'.jpg')
             try :
                 # chrac = rotate_bound(chrac, -7)[3:-3,4:-4]
                 # cv2.imshow("res ", chrac)
                 # cv2.waitKey(0)
                 # chrac = chrac[:,3:-3]
-                res = cv2.resize(chrac, (16, 36), interpolation=cv2.INTER_CUBIC)
+                res = cv2.resize(chrac, (24, 48), interpolation=cv2.INTER_CUBIC)
                 cv2.imwrite(r'C:/Users/lx/Desktop/handle/' + str(num) + '/'+str(i)+'.jpg',res)
                 res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
                 train_key.append( character_scaler.transform( [np.array( res ) .flatten() ] )[0] )
             except Exception  :
                 continue
         font = cv2.FONT_HERSHEY_PLAIN
-        cv2.putText(img2, ''.join(character_dect.predict(train_key)), (box[xs_sorted_index[0], 0]-25,box[ys_sorted_index[0], 1] + 10), font, 3, (255,0, 0), 2, False)
-        print(num,jiaodu,character_dect.predict(train_key))
+        cv2.putText(img2, ''.join(character_dect.predict(train_key)), (box[xs_sorted_index[0], 0]-25,box[ys_sorted_index[0], 1] + 10), font, 3, (0, 0,255), 2, False)
+        print(num,character_dect.predict(train_key))
 
         cv2.imwrite(
             r'C:/Users/lx/Desktop/handle/' + str(num) + '/rotadect' + str(x) + str(y) + str(w) + str(h) + '.jpg',
             img_plate)
-        # cv2.imshow('rotated', img_plate)
-        # cv2.waitKey(0)
 
     cv2.imwrite(r'C:/Users/lx/Desktop/handle/' + str(num) + '/img.jpg', img2)
     cv2.imwrite('C:/Users/lx/Desktop/final/image' + str(num) + '.jpg', img2)

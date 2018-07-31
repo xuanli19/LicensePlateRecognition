@@ -17,7 +17,7 @@ for rt, dirs, files in os.walk(path):
             filetype= str(i[0]).upper()
             img = cv2.imread(pic_name)
             # print(pic_name)
-            res = cv2.resize(img, (16,36), interpolation=cv2.INTER_CUBIC)
+            res = cv2.resize(img, (24,48), interpolation=cv2.INTER_CUBIC)
             res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
             train_key.append(np.array(res).flatten())
             # print(filetype)
@@ -25,7 +25,7 @@ for rt, dirs, files in os.walk(path):
         except Exception:
             continue
 scaler.fit(train_key)
-X_train, X_test, y_train, y_test = train_test_split( scaler.transform(train_key), train_value, test_size=0.3, random_state=33)
+X_train, X_test, y_train, y_test = train_test_split( scaler.transform(train_key), train_value, test_size=0.01, random_state=33)
 mlp.fit(X_train, y_train )
 print(  len(y_test)  )
 print('score:',mlp.score(X_test,y_test))
